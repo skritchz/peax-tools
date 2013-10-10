@@ -1,0 +1,59 @@
+#!/bin/bash
+
+function realpath(){
+    echo $(python -c "import sys; import os; print os.path.realpath(sys.argv[1])" $1)
+}
+
+kernel_folder=$(realpath $1)
+ramdisk_folder=$2
+output_file_name=$3
+
+if [ ! -f $kernel_folder/kernel.bin ]; then
+echo "Couldn't find kernel.bin in " $kernel_folder
+exit 1
+fi
+
+output_folder=$(realpath out)
+
+modules_folder=$output_folder/system/libs/modules/
+
+if [ -d $output_folder ]; then
+rm -rf $output_folder;
+fi
+
+mkdir $output_folder
+cp -r META-INF $output_folder
+
+mkdir -p  $modules_folder
+if [ -d $kernel_folder/modules ]; then
+#Copy the .ko !!!CAUTION we need to exclude some of the modules
+    for file in $(ls $kernel_folder/modules); do
+        case "$file" in
+        mtklfb.ko) 
+            echo "Skiping $file"
+            continue
+        ;;
+        pvrsrvkm.ko)
+            echo "Skiping $file"
+            continue
+        ;;
+        *)
+            cp $kernel_folder/modules/$file $modules_folder
+        ;;
+        esac
+    done
+else
+echo "Couldn't find any system folder in $kernel_folder"
+echo "Skipping copy of system folder"
+#Just to make the updater-script happy and the zip command happy
+fi
+
+exit 0
+#Now generate the new kernel
+./repack-MT65xx.pl -boot $kernel_folder/kernel.bin $ramdisk_folder $output_folder/boot.img
+
+cd out
+zip -9 -r $output_file_name boot.img system META-INF
+
+
+echo "File generated " $PWD/$output_file_name
